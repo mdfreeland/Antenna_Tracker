@@ -3,12 +3,13 @@ from PyQt4 import QtCore
 from PyQt4 import QtGui
 from PyQt4.QtCore import *
 from BalloonUpdate import *
+from datetime import datetime
 import MySQLdb
-import datetime
+# import datetime
 import serial
 import threading
 import json
-import time
+import time as t
 
 try:
     # For Python 3.0 and later
@@ -176,11 +177,12 @@ class GetAPRS(QtCore.QObject):
     start = pyqtSignal()
     setInterrupt = pyqtSignal()
 
-    def __init__(self, MainWindow, APRS):
+    def __init__(self, MainWindow, APRS, callsign):
         super(GetAPRS, self).__init__()
         self.mainWindow = MainWindow
         self.aprsSer = APRS
         self.aprsInterrupt = False
+        self.callsign = callsign
 
         # Emitted Signals
         self.mainWindow.aprsNewLocation.connect(
@@ -189,36 +191,40 @@ class GetAPRS(QtCore.QObject):
     def run(self):
         """ Gets tracking information from the APRS receiver """
 
-        aprsSer = self.APRS.getDevice()
+        # aprsSer = APRS.getDevice()
 
         while(not self.aprsInterrupt):
             ### Read the APRS serial port, and parse the string appropriately                               ###
             # Format:
             # "Callsign">CQ,WIDE1-1,WIDE2-2:!"Lat"N/"Lon"EO000/000/A="Alt"RadBug,23C,982mb,001
+            # TT4 Format:
+            # KC9VPW>APTT4,WIDE2-1:/063329h4156.04N/08738.57W>349/002/TinyTrak4 Alpha/A=000646
             # ###
             try:
-                line = str(aprsSer.readline())
-                print(line)
-                idx = line.find(self.callsign)
+                line = str(self.aprsSer.readline())
+                idx = -1 if line == '' else line.find(self.callsign)
                 if(idx != -1):
+                    print(line)
+                    
                     line = line[idx:]
-                    line = line[line.find("!") + 1:line.find("RadBug")]
                     line = line.split("/")
 
                     # Get the individual values from the newly created list ###
                     time = datetime.utcfromtimestamp(
-                        time.time()).strftime('%H:%M:%S')
-                    lat = line[0][0:-1]
+                        t.time()).strftime('%H:%M:%S')
+                    lat = line[1][line[1].find("h") + 1:-1]
                     latDeg = float(lat[0:2])
                     latMin = float(lat[2:])
-                    lon = line[1][0:line[1].find("W")]
+                    lon = line[2][0:line[2].find("W")]
                     lonDeg = float(lon[0:3])
                     lonMin = float(lon[3:])
                     lat = latDeg + (latMin / 60)
                     lon = -lonDeg - (lonMin / 60)
-                    alt = float(line[3][2:])
+                    alt = float(line[5][2:])
                     aprsSeconds = float(time.split(
                         ':')[0]) * 3600 + float(time.split(':')[1]) * 60 + float(time.split(':')[2])
+                        
+                    print("lat: {0}, long: {1}, alt: {2}".format(lat, lon, alt))
 
                     ### Create a new location object ###
                     try:
@@ -230,15 +236,15 @@ class GetAPRS(QtCore.QObject):
 
                     try:
                         # Notify the main GUI of the new location
-                        self.aprsNewLocation.emit(newLocation)
+                        self.mainWindow.aprsNewLocation.emit(newLocation)
                     except Exception, e:
                         print(str(e))
-            except:
-                print("Error retrieving APRS Data")
+            except Exception, e:
+                print("Error retrieving APRS Data", e)
 
         ### Clean Up ###
         try:
-            aprsSer.close()         # Close the APRS Serial Port
+            self.aprsSer.close()         # Close the APRS Serial Port
         except:
             print("Error closing APRS serial port")
 

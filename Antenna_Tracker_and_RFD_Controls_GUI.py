@@ -637,7 +637,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.callsign = self.aprsCallsign.text()
             if not self.aprsCOM.text() == "":
                 aprsCOM = str(self.aprsCOM.text())
-                self.APRS = SerialDevice(aprsCOM, 9600, 5)
+                self.APRS = SerialDevice(aprsCOM, 19200, 5)
 
         # Get the IMEI for the iridium modem, default to placeholder
         if self.iridiumIMEI.text() == '':
@@ -702,7 +702,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         if self.useAPRS and not self.aprsStarted:
             if self.APRSAttached:  # Don't start it up again if it's already going
-                self.getAPRS = GetAPRS(self, self.APRS.getDevice())
+                self.getAPRS = GetAPRS(self, self.APRS.getDevice(), self.callsign)
                 self.getAPRS.moveToThread(self.aprsThread)
                 self.getAPRS.start.connect(self.getAPRS.run)
                 self.getAPRS.setInterrupt.connect(self.getAPRS.interrupt)

@@ -1885,11 +1885,11 @@ class Ui_MainWindow(object):
             _translate("MainWindow", "Connections:", None))
         self.checkComPorts.setText(_translate("MainWindow", "Search", None))
         self.aprsCallsign.setPlaceholderText(
-            _translate("MainWindow", "KD0AWK-8", None))
+            _translate("MainWindow", "KC9VPW", None))
         self.rfdAttached.setText(_translate(
             "MainWindow", "RFD Connected", None))
         self.iridiumIMEI.setPlaceholderText(
-            _translate("MainWindow", "300234064909640", None))
+            _translate("MainWindow", "300234064903630", None))
         self.IMEILabel.setText(_translate("MainWindow", "Iridium IMEI", None))
         self.aprsCallsignLabel.setText(
             _translate("MainWindow", "APRS Callsign", None))
