@@ -60,7 +60,7 @@ class GetIridium(QtCore.QObject):
         prev = ''
         connectAttempts = 0
         while(not self.iridiumInterrupt):
-            time.sleep(2)
+            t.sleep(2)
             # Fetch the data from the API
             get_data = self.getApiData(self.IMEI)
             if get_data:
