@@ -7,6 +7,9 @@ from datetime import datetime
 import MySQLdb
 # import datetime
 import serial
+import kiss
+import aprs
+import aprslib
 import threading
 import json
 import time as t
@@ -60,7 +63,7 @@ class GetIridium(QtCore.QObject):
         prev = ''
         connectAttempts = 0
         while(not self.iridiumInterrupt):
-            time.sleep(2)
+            t.sleep(2)
             # Fetch the data from the API
             get_data = self.getApiData(self.IMEI)
             if get_data:
@@ -190,65 +193,77 @@ class GetAPRS(QtCore.QObject):
 
     def run(self):
         """ Gets tracking information from the APRS receiver """
-
+        print("Starting GetAPRS.run() method....")
         # aprsSer = APRS.getDevice()
+        self.aprsSer.start()
+        self.aprsSer.read(callback=self.parseAprsString, readmode=True)
 
         while(not self.aprsInterrupt):
-            ### Read the APRS serial port, and parse the string appropriately                               ###
-            # Format:
-            # "Callsign">CQ,WIDE1-1,WIDE2-2:!"Lat"N/"Lon"EO000/000/A="Alt"RadBug,23C,982mb,001
-            # TT4 Format:
-            # KC9VPW>APTT4,WIDE2-1:/063329h4156.04N/08738.57W>349/002/TinyTrak4 Alpha/A=000646
-            # ###
-            try:
-                line = str(self.aprsSer.readline())
-                idx = -1 if line == '' else line.find(self.callsign)
-                if(idx != -1):
-                    print(line)
-                    
-                    line = line[idx:]
-                    line = line.split("/")
-
-                    # Get the individual values from the newly created list ###
-                    time = datetime.utcfromtimestamp(
-                        t.time()).strftime('%H:%M:%S')
-                    lat = line[1][line[1].find("h") + 1:-1]
-                    latDeg = float(lat[0:2])
-                    latMin = float(lat[2:])
-                    lon = line[2][0:line[2].find("W")]
-                    lonDeg = float(lon[0:3])
-                    lonMin = float(lon[3:])
-                    lat = latDeg + (latMin / 60)
-                    lon = -lonDeg - (lonMin / 60)
-                    alt = float(line[5][2:])
-                    aprsSeconds = float(time.split(
-                        ':')[0]) * 3600 + float(time.split(':')[1]) * 60 + float(time.split(':')[2])
-                        
-                    print("lat: {0}, long: {1}, alt: {2}".format(lat, lon, alt))
-
-                    ### Create a new location object ###
-                    try:
-                        newLocation = BalloonUpdate(
-                            time, aprsSeconds, lat, lon, alt, "APRS", self.mainWindow.groundLat, self.mainWindow.groundLon, self.mainWindow.groundAlt)
-                    except:
-                        print(
-                            "Error creating a new balloon location object from APRS Data")
-
-                    try:
-                        # Notify the main GUI of the new location
-                        self.mainWindow.aprsNewLocation.emit(newLocation)
-                    except Exception, e:
-                        print(str(e))
-            except Exception, e:
-                print("Error retrieving APRS Data", e)
+            continue
 
         ### Clean Up ###
         try:
-            self.aprsSer.close()         # Close the APRS Serial Port
+            self.aprsSer.stop()         # Close the APRS Serial Port
         except:
             print("Error closing APRS serial port")
 
         self.aprsInterrupt = False
+
+    def parseAprsString(self, frame):
+        ### Read the APRS serial port, and parse the string appropriately ###
+        # Format:
+        # "Callsign">CQ,WIDE1-1,WIDE2-2:!"Lat"N/"Lon"EO000/000/A="Alt"RadBug,23C,982mb,001
+        # TT4 Format:
+        # KC9VPW>APTT4,WIDE2-1:/063329h4156.04N/08738.57W>349/002/TinyTrak4 Alpha/A=000646
+        # ###
+        print("Attempting to parse an APRS frame...")
+        try:
+            line = aprs.Frame(frame)
+            print(line)
+            aprsMessage = aprslib.parse(str(line))
+            print(aprsMessage)
+            if(aprsMessage['from'] == self.callsign):
+                print(line)
+                
+                #line = line[idx:]
+                #line = line.split("/")
+
+                # Get the individual values from the newly created list ###
+                time = datetime.utcfromtimestamp(
+                    t.time()).strftime('%H:%M:%S')
+                #lat = line[1][line[1].find("h") + 1:-1]
+                #latDeg = float(lat[0:2])
+                #latMin = float(lat[2:])
+                #lon = line[2][0:line[2].find("W")]
+                #lonDeg = float(lon[0:3])
+                #lonMin = float(lon[3:])
+                #lat = latDeg + (latMin / 60)
+                #lon = -lonDeg - (lonMin / 60)
+                #alt = float(line[5][2:])
+                aprsSeconds = float(time.split(
+                    ':')[0]) * 3600 + float(time.split(':')[1]) * 60 + float(time.split(':')[2])
+
+                lat = aprsMessage['latitude']
+                lon = aprsMessage['longitude']
+                alt = aprsMessage['altitude'] * 3.28084 #convert m to ft
+
+                print("lat: {0}, long: {1}, alt: {2}".format(lat, lon, alt))
+
+                ### Create a new location object ###
+                try:
+                    newLocation = BalloonUpdate(
+                        time, aprsSeconds, lat, lon, alt, "APRS", self.mainWindow.groundLat, self.mainWindow.groundLon, self.mainWindow.groundAlt)
+                except:
+                    print(
+                        "Error creating a new balloon location object from APRS Data")
+
+                try:
+                    # Notify the main GUI of the new location
+                    self.mainWindow.aprsNewLocation.emit(newLocation)
+                except Exception, e:
+                    print(str(e))
+        except Exception, e:
+            print("Error retrieving APRS Data", e)
 
     def interrupt(self):
         self.aprsInterrupt = True
