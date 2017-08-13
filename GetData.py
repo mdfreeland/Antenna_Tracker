@@ -225,21 +225,9 @@ class GetAPRS(QtCore.QObject):
             if(aprsMessage['from'] == self.callsign):
                 print(line)
                 
-                #line = line[idx:]
-                #line = line.split("/")
-
                 # Get the individual values from the newly created list ###
                 time = datetime.utcfromtimestamp(
                     t.time()).strftime('%H:%M:%S')
-                #lat = line[1][line[1].find("h") + 1:-1]
-                #latDeg = float(lat[0:2])
-                #latMin = float(lat[2:])
-                #lon = line[2][0:line[2].find("W")]
-                #lonDeg = float(lon[0:3])
-                #lonMin = float(lon[3:])
-                #lat = latDeg + (latMin / 60)
-                #lon = -lonDeg - (lonMin / 60)
-                #alt = float(line[5][2:])
                 aprsSeconds = float(time.split(
                     ':')[0]) * 3600 + float(time.split(':')[1]) * 60 + float(time.split(':')[2])
 
