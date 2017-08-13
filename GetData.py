@@ -4,8 +4,9 @@ from PyQt4 import QtGui
 from PyQt4.QtCore import *
 from BalloonUpdate import *
 from datetime import datetime
+from time import sleep
 import MySQLdb
-# import datetime
+import datetime
 import serial
 import kiss
 import aprs
