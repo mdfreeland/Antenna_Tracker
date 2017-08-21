@@ -6,7 +6,6 @@ from BalloonUpdate import *
 from datetime import datetime
 from time import sleep
 import MySQLdb
-import datetime
 import serial
 import kiss
 import aprs
@@ -38,14 +37,15 @@ class GetIridium(QtCore.QObject):
         self.dbName = name
         self.IMEI = IMEI
         self.iridiumInterrupt = False
+        self.lastUnixtime = t.time()
 
         # Emitted Signals
-        self.mainWindow.noIridium.connect(self.mainWindow.iridiumNoConnection)
+        #self.mainWindow.noIridium.connect(self.mainWindow.iridiumNoConnection)
         self.mainWindow.iridiumNewLocation.connect(
             self.mainWindow.updateBalloonLocation)
 
-    def getApiData(self, imei):
-        url = "http://eclipse.rci.montana.edu/php/antennaTracker.php?imei=%s" % imei
+    def getApiData(self):
+        url = "https://api.aprs.fi/api/get?name=KC9VPW-11&what=loc&apikey=102673.5Jc2H40kGPJem8J&format=json"
         try:
             # Timeout may be redundant, if port 80 is timing out, port 3306
             # will probably also
@@ -61,113 +61,39 @@ class GetIridium(QtCore.QObject):
         #     the modification is crude and should be refactored. :P
 
         self.iridiumInterrupt = False
-        prev = ''
-        connectAttempts = 0
         while(not self.iridiumInterrupt):
-            t.sleep(2)
+            t.sleep(10)
             # Fetch the data from the API
-            get_data = self.getApiData(self.IMEI)
+            get_data = self.getApiData()
             if get_data:
-                # set the data from the API values
-                dataMethod = "API"
-                remoteTime = get_data['remoteTime']
-                remoteHours = int(get_data['remoteHours'])
-                remoteMinutes = int(get_data['remoteMinutes'])
-                remoteSeconds = int(
-                    get_data['remoteSeconds']) + (60 * remoteMinutes) + (3600 * remoteHours)
-                remoteLat = float(get_data['remoteLat'])
-                remoteLon = float(get_data['remoteLon'])
-                remoteAlt = float(get_data['remoteAlt'])
-                ### Create a new location object ###
                 try:
-                    newLocation = BalloonUpdate(remoteTime, remoteSeconds, remoteLat, remoteLon, remoteAlt,
-                                                "Iridium", self.mainWindow.groundLat, self.mainWindow.groundLon, self.mainWindow.groundAlt)
-                except:
-                    print(
-                        "Error creating a new balloon location object from Iridium Data")
+                    print (get_data)
+                    aprsEntry = get_data['entries'][0]
+                    # set the data from the API values
+                    unixTime = float(aprsEntry['time'])
+                    print (self.lastUnixtime)
+                    print (unixTime)
+                    if unixTime > self.lastUnixtime:
+                        self.lastUnixtime = unixTime
+                        print(get_data)
+                        remoteTime = datetime.utcfromtimestamp(
+                            unixTime).strftime('%H:%M:%S')
+                        remoteSeconds = float(remoteTime.split(
+                            ':')[0]) * 3600 + float(remoteTime.split(':')[1]) * 60 + float(remoteTime.split(':')[2])
+                        remoteLat = float(aprsEntry['lat'])
+                        remoteLon = float(aprsEntry['lng'])
+                        remoteAlt = float(aprsEntry['altitude']) * 3.28084 #convert m to ft
 
-                try:
-                    # Notify the main GUI of the new location
-                    self.mainWindow.iridiumNewLocation.emit(newLocation)
-                except Exception, e:
-                    print(str(e))
+                        print("lat: {0}, long: {1}, alt: {2}".format(remoteLat, remoteLon, remoteAlt))
 
-            else:
-                # use the database
-                # Connect to the SQL Database (try 20 times)
-                connected = False
-                while(not connected and not self.iridiumInterrupt):
-                    QtGui.QApplication.processEvents()
-                    if connectAttempts < 20:
-                        try:
-                            # Connect to the database
-                            db_local = MySQLdb.connect(
-                                host=self.dbHost, user=self.dbUser, passwd=self.dbPass, db=self.dbName)
-                            # prepare a cursor object using cursor() method
-                            cursor = db_local.cursor()
-                            sql = "select gps_fltDate,gps_time,gps_lat,gps_long,gps_alt from gps where gps_IMEI = %s order by pri_key DESC LIMIT 1" % (
-                                IMEI)
-                            cursor.execute(sql)
-                            connected = True
-                            if self.iridiumInterrupt:
-                                cursor.close()
-                                db_local.close()
-                                connected = True
-                        except:
-                            print(
-                                "Failed to connect to database, trying again in 1 sec")
-                            connectAttempts += 1
-                    else:
-                        print("Failed to connect to database too many times")
-                        self.interrupt()
-                        self.mainWindow.noIridium.emit()
-                if connected:
-                    ### Fetch a single row using fetchone() method. ###
-                    # POL: Note, there will only ever be one row, since we are
-                    # using "LIMIT 1"
-                    try:
-                        results = cursor.fetchone()
-                        if(results != prev):
-                            prev = results
-                            remoteTime = results[1].split(":")
-                            remoteHours = int(remoteTime[0])
-                            remoteMinutes = int(remoteTime[1])
-                            remoteSeconds = int(remoteTime[2])
-                            remoteTime = results[1]
-                            remoteSeconds = remoteSeconds + \
-                                (60 * remoteMinutes) + (3600 * remoteHours)
-                            # http://stackoverflow.com/questions/379906/parse-string-to-float-or-int
-                            remoteLat = float(results[2])
-                            remoteLon = float(results[3])
-                            # (meters to feet conversion)
-                            remoteAlt = float(results[4]) * 3.280839895
-
-                            ### Create a new location object ###
-                            try:
-                                newLocation = BalloonUpdate(remoteTime, remoteSeconds, remoteLat, remoteLon, remoteAlt,
-                                                            "Iridium", self.mainWindow.groundLat, self.mainWindow.groundLon, self.mainWindow.groundAlt)
-                            except:
-                                print(
-                                    "Error creating a new balloon location object from Iridium Data")
-
-                            try:
-                                # Notify the main GUI of the new location
-                                self.mainWindow.iridiumNewLocation.emit(
-                                    newLocation)
-                            except Exception, e:
-                                print(str(e))
-                    except:
-                        print(
-                            "ERROR PARSING DATA FROM DATABASE: Cannot parse data or data may not exist, please double check your IMEI number")
-                else:
-                    print("ERROR: Unable to connect to database!")
-
-        ### Clean up ###
-        try:
-            cursor.close()
-            db_local.close()
-        except:
-            print("Error closing database")
+                        ### Create a new location object ###
+                        newLocation = BalloonUpdate(remoteTime, remoteSeconds, remoteLat, remoteLon, remoteAlt,
+                                                    "Iridium", self.mainWindow.groundLat, self.mainWindow.groundLon, self.mainWindow.groundAlt)
+                        # Notify the main GUI of the new location
+                        self.mainWindow.iridiumNewLocation.emit(newLocation)
+                except Exception as e:
+                    print("Error creating a new balloon location object from Iridium Data")
+                    print(e)
 
         self.iridiumInterrupt = False
 
@@ -232,9 +158,9 @@ class GetAPRS(QtCore.QObject):
                 aprsSeconds = float(time.split(
                     ':')[0]) * 3600 + float(time.split(':')[1]) * 60 + float(time.split(':')[2])
 
-                lat = aprsMessage['latitude']
-                lon = aprsMessage['longitude']
-                alt = aprsMessage['altitude'] * 3.28084 #convert m to ft
+                lat = float(aprsMessage['latitude'])
+                lon = float(aprsMessage['longitude'])
+                alt = float(aprsMessage['altitude']) * 3.28084 #convert m to ft
 
                 print("lat: {0}, long: {1}, alt: {2}".format(lat, lon, alt))
 

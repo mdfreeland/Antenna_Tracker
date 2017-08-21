@@ -184,8 +184,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Command control button Links
 
-        self.cutdownButton.clicked.connect(self.sendCutdownCommand)
-        self.idleButton.clicked.connect(self.sendIdleCommand)
+        #self.cutdownButton.clicked.connect(self.sendCutdownCommand)
+        #self.idleButton.clicked.connect(self.sendIdleCommand)
 
         # Manual Entry Button Links
         self.ManualEntryUpdateButton.clicked.connect(self.manualEntryUpdate)
@@ -343,13 +343,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Determine Serial Connections
         self.searchComPorts()
 
-    def iridiumNoConnection(self):
-        self.useIridium = False
-        self.autoIridium.setChecked(False)
-        if(not self.autoAPRS.isChecked() and not self.autoRFD.isChecked()):
-            self.autoDisabled.setChecked(True)
-        self.createWarning("Unable to Connect to Iridium Database")
-        self.iridiumStarted = False
+    #def iridiumNoConnection(self):
+    #    self.useIridium = False
+    #    self.autoIridium.setChecked(False)
+    #    if(not self.autoAPRS.isChecked() and not self.autoRFD.isChecked()):
+    #        self.autoDisabled.setChecked(True)
+    #    self.createWarning("Unable to Connect to Iridium Database")
+    #    self.iridiumStarted = False
 
     def closeEvent(self, event):
         # At the close of the main window, write each payload's information to
